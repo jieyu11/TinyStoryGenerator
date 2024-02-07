@@ -7,8 +7,9 @@
 # ---- The model ----
 # -------------------
 
-# model_file = "models/finetuned/perf/lora.pt"
-model_file = "models/finetuned/distilgpt2.pt"
+lora_peft_folder = "models/finetuned/perf_full"
+model_file = "models/finetuned/perf/lora.pt"
+# model_file = "models/finetuned/distilgpt2.pt"
 model_name = "distilgpt2"
  
 # # use the quantized model

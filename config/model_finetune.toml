@@ -3,9 +3,11 @@
 input_file = "data/processed/stories_1000_test.csv"
 
 # model output file name
-lora_peft = false
-model_output = "models/finetuned/distilgpt2.pt"
-# model_output = "models/finetuned/perf/lora.pt"
+# lora_peft = false
+# model_output = "models/finetuned/distilgpt2.pt"
+lora_peft = true
+model_output = "models/finetuned/perf/lora.pt"
+model_folder = "models/finetuned/perf_full"
 
 # if true, save each model state after every epoch during training
 save_per_epoch = false

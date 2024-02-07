@@ -7,6 +7,7 @@ import toml
 from time import time
 from datetime import timedelta
 from random import choice
+from peft import LoraConfig, PeftModel
 import pandas as pd
 
 logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s",
@@ -47,6 +48,7 @@ class Inference:
         model_file = config["model_file"]
         model_name = config.get("model_name", "distilgpt2")
         quantized = config.get("quantized", False)
+        self.lora_peft_folder = config.get("lora_peft_folder", None)
 
         device = config.get("device", "cpu")
         self._load_model(model_file, model_name, device, quantized)
@@ -68,6 +70,21 @@ class Inference:
         logger.info("Using random seed: %d" % random_seed)
         torch.manual_seed(random_seed)
 
+    def _lora_config(self):
+        LORA_R = 256 # 512
+        LORA_ALPHA = 512 # 1024
+        LORA_DROPOUT = 0.05
+        # Define LoRA Config
+        lora_config = LoraConfig(
+                         r = LORA_R, # the dimension of the low-rank matrices
+                         lora_alpha = LORA_ALPHA, # scaling factor for the weight matrices
+                         lora_dropout = LORA_DROPOUT, # dropout probability of the LoRA layers
+                         bias="none",
+                         task_type="CAUSAL_LM",
+                         # target_modules=["query_key_value"],
+        )
+        return lora_config
+
     def _load_model(self, model_file, model_name, device, quantized):
         """
         Load model and tokenizer for inference.
@@ -86,9 +103,15 @@ class Inference:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name, return_dict=True
         )
-        self.model.load_state_dict(
-            torch.load(model_file, map_location=torch.device(device))
-        )
+        if self.lora_peft_folder and os.path.exists(self.lora_peft_folder):
+            lora_config = self._lora_config()
+            self.model = PeftModel.from_pretrained(self.model,  self.lora_peft_folder)
+        else:
+            self.model.load_state_dict(
+                torch.load(model_file, map_location=torch.device(device))
+            )
+  
+
         # transfer the model weights to the correct device
         self.model = self.model.to(device)
         if quantized:

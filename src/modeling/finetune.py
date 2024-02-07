@@ -74,6 +74,7 @@ class ModelFinetune:
         self.model_output = config.get("model_output", "model_trained.pt")
         assert self.model_output.endswith(".pt"), "use .pt for model output!"
         self.save_per_epoch = config.get("save_per_epoch", False)
+        self.model_folder = config.get("model_folder", None)
 
         # check if the output folder exists, if not, create one!
         outfold = "/".join(self.model_output.split("/")[0:-1])
@@ -179,6 +180,9 @@ class ModelFinetune:
         # after model finetuning, save the model
         logger.info("Finetuned model saved: %s" % self.model_output)
         torch.save(model.state_dict(), self.model_output)
+        if not (self.model_folder is None):
+            model.save_pretrained(self.model_folder)
+            logger.info("Finetuned model also saved: %s" % self.model_folder)
 
 
 def main():
