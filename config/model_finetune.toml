@@ -1,0 +1,37 @@
+# Usage: python3 src/modeling/finetune.py -c config/model_finetune.toml 
+#
+input_file = "data/processed/stories_1000_test.csv"
+
+# model output file name
+lora_peft = false
+model_output = "models/finetuned/distilgpt2.pt"
+# model_output = "models/finetuned/perf/lora.pt"
+
+# if true, save each model state after every epoch during training
+save_per_epoch = false
+
+#
+# if input text tokens length is longer than max_seq_len, it is skipped.
+# e.g. max_seq_len = 500
+# if max_seq_len is < 0, then no restriction is applied.
+#
+max_seq_len = -1
+
+# pre-trained model name
+# tried: "gpt2", "distilgpt2", "sshleifer/tiny-gpt2", "facebook/opt-125m"
+#
+model_name = "distilgpt2"
+
+# use the following parameter to force a device ("cpu" or "cuda")
+# if it is not set, then use "cuda" if it is available, otherwise use "cpu"
+# device = "cuda"
+# # OR:
+# device = "cpu"
+
+#
+# model fine-tuning hyper-parameters
+#
+batch_size = 16
+epochs =  1
+learning_rate =  0.00003
+warmup_steps = 5000

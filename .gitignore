@@ -1,0 +1,6 @@
+howto/
+data/
+local_setup/
+.DS_Store
+/*.json
+models/

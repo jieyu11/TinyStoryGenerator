@@ -1,0 +1,16 @@
+# Usage: python3 src/processes/dataprep.py -c config/dataprep.toml
+
+ndata = 1000
+
+# fraction of data used for training and the rest for testing
+train_fraction = 0.95
+split_random_seed = 12345678
+
+# list of input data files with web scrapping
+input_name = "data/original/TinyStoriesV2-GPT4-train.txt"
+
+# tokens used for separating the keys in the input. 
+# starter = "<|startoftext|>"
+# ender = "<|endoftext|>"
+
+outname = "data/processed/stories_1000.csv"
