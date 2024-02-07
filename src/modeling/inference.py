@@ -44,14 +44,19 @@ class Inference:
             - random_seed: (int, optional, default 13572468) seed to control
             randomness in torch.
         """
-        assert "model_file" in config, "Need to setup model file!"
-        model_file = config["model_file"]
-        model_name = config.get("model_name", "distilgpt2")
-        quantized = config.get("quantized", False)
-        self.lora_peft_folder = config.get("lora_peft_folder", None)
+        self.output_file = config.get("output_file", "./out.csv")
+        self.model_file = config.get("model_file", None)
+        self.model_name = config.get("model_name", "distilgpt2")
+        self.quantized = config.get("quantized", False)
+        self.lora_peft = config.get("lora_peft", None)
+        self.model_folder = config.get("model_folder", None)
+        self.device = config.get("device", "cpu")
 
-        device = config.get("device", "cpu")
-        self._load_model(model_file, model_name, device, quantized)
+        assert not (self.model_file is None and self.model_folder is None), \
+            "model_file and model_folder cannot both be None"
+
+        self.model = self._load_model()
+        self.tokenizer = self._setup_tokenizer()
 
         self.max_generated_len = config.get("max_generated_len", 500)
         logger.info("Max generated length is %d" % self.max_generated_len)
@@ -70,22 +75,7 @@ class Inference:
         logger.info("Using random seed: %d" % random_seed)
         torch.manual_seed(random_seed)
 
-    def _lora_config(self):
-        LORA_R = 256 # 512
-        LORA_ALPHA = 512 # 1024
-        LORA_DROPOUT = 0.05
-        # Define LoRA Config
-        lora_config = LoraConfig(
-                         r = LORA_R, # the dimension of the low-rank matrices
-                         lora_alpha = LORA_ALPHA, # scaling factor for the weight matrices
-                         lora_dropout = LORA_DROPOUT, # dropout probability of the LoRA layers
-                         bias="none",
-                         task_type="CAUSAL_LM",
-                         # target_modules=["query_key_value"],
-        )
-        return lora_config
-
-    def _load_model(self, model_file, model_name, device, quantized):
+    def _load_model(self):
         """
         Load model and tokenizer for inference.
         Parameters:
@@ -97,39 +87,42 @@ class Inference:
             quantized: (bool, optional, default False) if true, quantized
             version of the corresponding model is used.
         """
-        assert os.path.exists(model_file), "File %s not exist!" % model_file
-
         # load the pre-trained GPT-2 model and tokenizer.
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name, return_dict=True
+        model = AutoModelForCausalLM.from_pretrained(
+            self.model_name, return_dict=True
         )
-        if self.lora_peft_folder and os.path.exists(self.lora_peft_folder):
-            lora_config = self._lora_config()
-            self.model = PeftModel.from_pretrained(self.model,  self.lora_peft_folder)
+        if self.lora_peft and os.path.exists(self.model_folder):
+            assert os.path.exists(self.model_folder), "Folder %s not exist!" % self.model_folder
+            model = PeftModel.from_pretrained(model,  self.model_folder)
+            logger.info("Loading model from folder: %s" % self.model_folder)
         else:
-            self.model.load_state_dict(
-                torch.load(model_file, map_location=torch.device(device))
+            assert os.path.exists(self.model_file), "File %s not exist!" % self.model_file
+            model.load_state_dict(
+                torch.load(self.model_file, map_location=torch.device(self.device))
             )
-  
+            logger.info("Loading model from file: %s" % self.model_file)
 
         # transfer the model weights to the correct device
-        self.model = self.model.to(device)
-        if quantized:
-            self.model = torch.quantization.quantize_dynamic(
-                self.model, {torch.nn.Linear}, dtype=torch.qint8)
-            self.model.to(self.model.device)
+        model = model.to(self.device)
+        if self.quantized:
+            model = torch.quantization.quantize_dynamic(
+                model, {torch.nn.Linear}, dtype=torch.qint8)
+            model.to(self.model.device)
             logger.info("Loading quantized model.")
-        logger.info("The model device is: %s" % self.model.device)
-        self.model.eval()
+        logger.info("The model device is: %s" % model.device)
+        model.eval()
+        return model
 
+    def _setup_tokenizer(self):
         # setup tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         #
         # When generating texts, the logits of right-most token are used to
         # predict the next token, therefore the padding should be on the left.
         #
-        self.tokenizer.padding_side = "left"
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        tokenizer.padding_side = "left"
+        tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
 
     def _set_hyper_parameters(self, config={}):
         """
@@ -262,9 +255,7 @@ class Inference:
             bad_words_ids=badwords.input_ids
         )
         outputs = [self.tokenizer.decode(x) for x in output_sequences]
-        print("DEBUG, output", outputs)
         outputs = [self._clean_output(v) for v in outputs]
-        print("DEBUG, cleaned output", outputs)
         return outputs
 
     def _input_data_prep(self, query, nresults):
@@ -299,6 +290,11 @@ class Inference:
         df_texts = df_texts.drop_duplicates(subset=["texts"])
         logger.info("N requested: %d, unique result generated: %d, query: '%s'"
                     % (nresults, len(df_texts), query))
+        try:
+            df_texts.to_csv(self.output_file, index=False)
+            logger.info("Output saved to: %s" % self.output_file)
+        except Exception:
+            logger.info("Output not saved to: %s!" % self.output_file)
         return df_texts
 
 
@@ -325,6 +321,8 @@ def main():
     args = parser.parse_args()
     logger.info("Reading config file: %s" % args.config)
     config = toml.load(args.config)
+    if args.random_seed:
+        config["random_seed"] = args.random_seed
 
     query = args.query
     num_results = args.number_results
@@ -334,7 +332,7 @@ def main():
         t.reset_random_seed(args.random_seed)
     t_start = time()
     df = t.get_result(query, num_results)
-    logger.info('Output examples:\n%s' % df.head(20).to_string())
+    logger.info('Output examples:\n%s' % df["texts"].head(20).to_string())
 
     tdif = time() - t_start
     logger.info("Testing model done!")

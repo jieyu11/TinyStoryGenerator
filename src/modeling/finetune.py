@@ -75,6 +75,8 @@ class ModelFinetune:
         assert self.model_output.endswith(".pt"), "use .pt for model output!"
         self.save_per_epoch = config.get("save_per_epoch", False)
         self.model_folder = config.get("model_folder", None)
+        if self.lora_peft:
+            assert self.model_folder is not None, "Must set a folder for LoRA Peft run."
 
         # check if the output folder exists, if not, create one!
         outfold = "/".join(self.model_output.split("/")[0:-1])
@@ -117,14 +119,7 @@ class ModelFinetune:
         model.config.to_json_file("adapter_config.json")
         return model
 
-    def finetune(self):
-        """
-        GPT-2 model fine-tuning.
-        """
-        logger.info("Training model: %s" % self.model_name)
-        # tokenizer = GPT2Tokenizer.from_pretrained(self.model_name)
-        # model = GPT2LMHeadModel.from_pretrained(self.model_name)
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+    def _load_model(self):
         model = AutoModelForCausalLM.from_pretrained(self.model_name)
         if self.lora_peft:
             logger.info("Loading LoRA model.")
@@ -132,6 +127,15 @@ class ModelFinetune:
         logger.info("Number of trainable parameters: %d." % self.trainable_parameters(model))
         model = model.to(self.device)
         model.train()
+        return model
+        
+    def finetune(self):
+        """
+        GPT-2 model fine-tuning.
+        """
+        logger.info("Training model: %s" % self.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        model = self._load_model()
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_training_steps=-1,
@@ -146,13 +150,7 @@ class ModelFinetune:
                 text = self.data.iloc[idx, 0]
                 if idx % 1000 == 0 and epoch == 0:
                     logger.info("index %d, input text: %s" % (idx, text))
-                tensor = torch.tensor(tokenizer.encode(text)).\
-                    unsqueeze(0).to(self.device)
-                if tensor.size()[1] > self.max_seq_len and\
-                        self.max_seq_len > 0:
-                    logger.warning("Input: \"%s\" too long (%d tokens). Skip!"
-                                   % (text, tensor.size()[1]))
-                    continue
+                tensor = torch.tensor(tokenizer.encode(text)).unsqueeze(0).to(self.device)
                 # Sequence to model
                 outputs = model(tensor, labels=tensor)
                 loss, logits = outputs[:2]
@@ -171,18 +169,19 @@ class ModelFinetune:
                     logger.info("Sum loss: %f" % sum_loss)
                     batch_count = 0
                     sum_loss = 0.0
-            if self.save_per_epoch:
+            if self.save_per_epoch and not self.lora_peft:
                 outname = self.model_output.replace(
                     ".pt", "_epoch-%d.pt" % epoch)
                 logger.info("Saving model state: %s" % outname)
                 torch.save(model.state_dict(), outname)
 
-        # after model finetuning, save the model
-        logger.info("Finetuned model saved: %s" % self.model_output)
-        torch.save(model.state_dict(), self.model_output)
-        if not (self.model_folder is None):
+        if self.lora_peft:
+            assert self.model_folder is not None, ""
             model.save_pretrained(self.model_folder)
-            logger.info("Finetuned model also saved: %s" % self.model_folder)
+            logger.info("Finetuned model saved in folder: %s" % self.model_folder)
+        else:
+            logger.info("Finetuned model saved: %s" % self.model_output)
+            torch.save(model.state_dict(), self.model_output)
 
 
 def main():

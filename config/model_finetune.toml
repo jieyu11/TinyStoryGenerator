@@ -6,8 +6,7 @@ input_file = "data/processed/stories_1000_test.csv"
 # lora_peft = false
 # model_output = "models/finetuned/distilgpt2.pt"
 lora_peft = true
-model_output = "models/finetuned/perf/lora.pt"
-model_folder = "models/finetuned/perf_full"
+model_folder = "models/finetuned/peft_full"
 
 # if true, save each model state after every epoch during training
 save_per_epoch = false
@@ -19,8 +18,8 @@ save_per_epoch = false
 #
 max_seq_len = -1
 
-# pre-trained model name
-# tried: "gpt2", "distilgpt2", "sshleifer/tiny-gpt2", "facebook/opt-125m"
+# pre-trained base model name
+# e.g.: "gpt2", "distilgpt2", "sshleifer/tiny-gpt2", "facebook/opt-125m"
 #
 model_name = "distilgpt2"
 
