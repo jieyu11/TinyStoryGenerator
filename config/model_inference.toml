@@ -12,10 +12,13 @@ output_file = "output/test2.csv"
 # model_folder = "models/finetuned/peft_full"
 
 lora_peft = false
-model_file = "models/finetuned/distilgpt2.pt"
+# model_file = "models/finetuned/distilgpt2.pt"
+
+use_pretrained_model = true
 
 # base model name
-model_name = "distilgpt2"
+# model_name = "distilgpt2"
+model_name = "meta-llama/Llama-2-7b-hf"
  
 # # use the quantized model
 # quantized = true

@@ -50,10 +50,11 @@ class Inference:
         self.quantized = config.get("quantized", False)
         self.lora_peft = config.get("lora_peft", None)
         self.model_folder = config.get("model_folder", None)
+        self.use_model_pretrained = config.get("use_pretrained_model", False)
         self.device = config.get("device", "cpu")
 
-        assert not (self.model_file is None and self.model_folder is None), \
-            "model_file and model_folder cannot both be None"
+        assert self.use_model_pretrained or self.model_file or self.model_folder, \
+            "Either use_model_pretrained = True or one of model_file and model_folder is set."
 
         self.model = self._load_model()
         self.tokenizer = self._setup_tokenizer()
@@ -95,6 +96,9 @@ class Inference:
             assert os.path.exists(self.model_folder), "Folder %s not exist!" % self.model_folder
             model = PeftModel.from_pretrained(model,  self.model_folder)
             logger.info("Loading model from folder: %s" % self.model_folder)
+        elif self.use_model_pretrained:
+            model = AutoModelForCausalLM.from_pretrained(self.model_name)
+            logger.info("Loading pretrained model: %s" % self.model_name)
         else:
             assert os.path.exists(self.model_file), "File %s not exist!" % self.model_file
             model.load_state_dict(
