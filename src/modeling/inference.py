@@ -119,7 +119,7 @@ class Inference:
 
     def _setup_tokenizer(self):
         # setup tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name, model_max_length=4096)
         #
         # When generating texts, the logits of right-most token are used to
         # predict the next token, therefore the padding should be on the left.
@@ -170,6 +170,7 @@ class Inference:
                 search is enabled.
         """
         # hyper parameters
+        self.max_new_tokens = config.get("max_new_tokens", 512)
         self.temperature = config.get("temperature", 1.0)
         self.top_k = config.get("top_k", 50)
         self.top_p = config.get("top_p", 1.0)
@@ -244,6 +245,7 @@ class Inference:
             # disable sampling to test if batching affects output
             # do_sample=False,
             do_sample=True,
+            max_new_tokens=self.max_new_tokens,
             temperature=self.temperature,
             top_k=self.top_k,
             top_p=self.top_p,
@@ -336,7 +338,7 @@ def main():
         t.reset_random_seed(args.random_seed)
     t_start = time()
     df = t.get_result(query, num_results)
-    logger.info('Output examples:\n%s' % df["texts"].head(20).to_string())
+    logger.info('Output examples:\n%s' % df["texts"].iloc[0])
 
     tdif = time() - t_start
     logger.info("Testing model done!")
